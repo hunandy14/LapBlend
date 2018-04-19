@@ -13,5 +13,33 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="來源檔案\LapBlend">
+      <UniqueIdentifier>{709628fa-b1f2-407a-9d75-14187c5de02d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="來源檔案\Raw2Img">
+      <UniqueIdentifier>{5d0e2a04-0e9c-466e-a005-585567948c80}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="LapBlend_main.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="Raw2Img\Raw2img.cpp">
+      <Filter>來源檔案\Raw2Img</Filter>
+    </ClCompile>
+    <ClCompile Include="LapBlend\LapBlend.cpp">
+      <Filter>來源檔案\LapBlend</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Raw2Img\Raw2img.hpp">
+      <Filter>來源檔案\Raw2Img</Filter>
+    </ClInclude>
+    <ClInclude Include="Raw2Img\Raw2img_type.hpp">
+      <Filter>來源檔案\Raw2Img</Filter>
+    </ClInclude>
+    <ClInclude Include="LapBlend\LapBlend.hpp">
+      <Filter>來源檔案\LapBlend</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
