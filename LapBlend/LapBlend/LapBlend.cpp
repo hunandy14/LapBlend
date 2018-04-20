@@ -7,6 +7,7 @@ Final: 2018/04/12
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include <timer.hpp>
 using namespace std;
 
