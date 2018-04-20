@@ -785,12 +785,12 @@ void WarpCyliMuitBlend(basic_ImgData &dst,
 	
 	// 取出重疊區
 	basic_ImgData cut1, cut2;
-	getOverlap_noncut(src1, src2, cut1, cut2, corner);
+	getOverlap(src1, src2, cut1, cut2, corner);
 	// 混合重疊區
 	basic_ImgData blend;
 	blendLaplacianImg(blend, cut1, cut2);
 	// 合併三張圖片
-	mergeOverlap_noncut(src1, src2, blend, dst, corner);
+	mergeOverlap(src1, src2, blend, dst, corner);
 }
 
 
