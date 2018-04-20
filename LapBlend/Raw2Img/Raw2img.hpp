@@ -90,7 +90,7 @@ public:
     // 讀 Raw 檔
     static void read_raw(std::vector<uch>& raw, std::string name);
     // 寫 Bmp 檔
-    static void raw2bmp(std::string name, std::vector<uch>& raw,
+    static void raw2bmp(std::string name, const std::vector<uch>& raw,
         uint32_t width, uint32_t height, uint16_t bits=24);
     // 寫 Raw 檔
     static void write_raw(std::string name, std::vector<uch>& raw);

@@ -33,12 +33,12 @@ void ImgData_resize(const basic_ImgData& src, basic_ImgData &dst) {
 	dst.bits = src.bits;
 };
 // 輸出 bmp
-void ImgData_write(basic_ImgData &dst, string name) {
-	Raw2Img::raw2bmp(name, dst.raw_img, dst.width, dst.height);
+void ImgData_write(const basic_ImgData &src, string name) {
+	Raw2Img::raw2bmp(name, src.raw_img, src.width, src.height);
 };
 // 讀取bmp
-void ImgData_read(basic_ImgData &src, std::string name) {
-	Raw2Img::read_bmp(src.raw_img, name, &src.width, &src.height, &src.bits);
+void ImgData_read(basic_ImgData &dst, std::string name) {
+	Raw2Img::read_bmp(dst.raw_img, name, &dst.width, &dst.height, &dst.bits);
 }
 
 
@@ -588,6 +588,25 @@ void WarpCyliCorner(const basic_ImgData &src, vector<int>& corner) {
 		}
 	}
 }
+// 刪除左右黑邊
+void delPillarboxing(const basic_ImgData &src, basic_ImgData &dst,
+	vector<int>& corner)
+{
+	// 新圖大小
+	int newH=src.height;
+	int newW=corner[2]-corner[0];
+	ImgData_resize(dst, newW, newH, 24);
+#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW; i++) {
+			for (int  rgb = 0; rgb < 3; rgb++) {
+				dst.raw_img[(j*dst.width+i)*3 +rgb] =
+					src.raw_img[(j*src.width+(i+corner[0]))*3 +rgb];
+			}
+		}
+	}
+	ImgData_write(dst, "delPillarboxing.bmp");
+}
 // 取出重疊區
 void getOverlap(const basic_ImgData &src1, const basic_ImgData &src2,
 	basic_ImgData& cut1, basic_ImgData& cut2, vector<int> corner)
@@ -626,8 +645,49 @@ void getOverlap(const basic_ImgData &src1, const basic_ImgData &src2,
 			}
 		}
 	}
-	//write_img(cut1, "__cut1.bmp");
-	//write_img(cut2, "__cut2.bmp");
+	//ImgData_write(cut1, "__cut1.bmp");
+	//ImgData_write(cut2, "__cut2.bmp");
+}
+
+void getOverlap_noncut(const basic_ImgData &src1, const basic_ImgData &src2,
+	basic_ImgData& cut1, basic_ImgData& cut2, vector<int> corner)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=src1.height+abs(my);
+	int newW=corner[2]-corner[0]+mx;
+	// 重疊區大小
+	int lapH=newH;
+	int lapW=corner[2]-corner[0]-mx;
+	// 兩張圖的高度偏差值
+	int myA = my>0? 0:-my;
+	int myB = my<0? 0:my;
+	// 重疊區
+	ImgData_resize(cut1, lapW, lapH, 24);
+	ImgData_resize(cut2, lapW, lapH, 24);
+#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW-mx; i++) {
+			// 圖1
+			if (i < corner[2]-corner[0]-mx and j<src1.height-1) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					cut1.raw_img[((j+myA)*cut1.width +i) *3+rgb]
+						= src1.raw_img[((j)*src1.width +(i+corner[0]+mx)) *3+rgb];
+				}
+			}
+			// 圖2
+			if (i >= mx and j<src2.height-1) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					cut2.raw_img[((j+myB)*cut2.width +(i-mx)) *3+rgb] = 
+						src2.raw_img[((j)*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+	//ImgData_write(cut1, "__cut1.bmp");
+	//ImgData_write(cut2, "__cut2.bmp");
 }
 // 重疊區與兩張原圖合併
 void mergeOverlap(const basic_ImgData &src1, const basic_ImgData &src2,
@@ -669,6 +729,49 @@ void mergeOverlap(const basic_ImgData &src1, const basic_ImgData &src2,
 		}
 	}
 }
+
+void mergeOverlap_noncut(const basic_ImgData &src1, const basic_ImgData &src2,
+	const basic_ImgData &blend, basic_ImgData &dst, vector<int> corner)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=src1.height+abs(my);
+	int newW=corner[2]-corner[0]+mx;
+	ImgData_resize(dst, newW, newH, 24);
+	// 兩張圖的高度偏差值
+	int myA = my>0? 0:-my;
+	int myB = my<0? 0:my;
+
+	// 合併圖片
+#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW; i++) {
+			// 圖1
+			if (i < mx and j<src1.height-1) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst.raw_img[((j+myA)*dst.width +i) *3+rgb] = 
+						src1.raw_img[(((j))*src1.width +(i+corner[0])) *3+rgb];
+				}
+			}
+			// 重疊區
+			else if (i >= mx and i < corner[2]-corner[0]) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst.raw_img[(j*dst.width +i) *3+rgb] = 
+						blend.raw_img[(j*blend.width+(i-mx)) *3+rgb];
+				}
+			}
+			// 圖2
+			else if (i >= corner[2]-corner[0] and j<src2.height) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst.raw_img[((j+myB)*dst.width +i) *3+rgb] = 
+						src2.raw_img[((j)*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+}
 // 混合兩張投影過(未裁減)的圓柱，過程會自動裁減輸出
 void WarpCyliMuitBlend(basic_ImgData &dst, 
 	const basic_ImgData &src1, const basic_ImgData &src2,
@@ -679,14 +782,15 @@ void WarpCyliMuitBlend(basic_ImgData &dst,
 	WarpCyliCorner(src1, corner);
 	corner.push_back(mx);
 	corner.push_back(my);
+	
 	// 取出重疊區
 	basic_ImgData cut1, cut2;
-	getOverlap(src1, src2, cut1, cut2, corner);
+	getOverlap_noncut(src1, src2, cut1, cut2, corner);
 	// 混合重疊區
 	basic_ImgData blend;
 	blendLaplacianImg(blend, cut1, cut2);
 	// 合併三張圖片
-	mergeOverlap(src1, src2, blend, dst, corner);
+	mergeOverlap_noncut(src1, src2, blend, dst, corner);
 }
 
 
@@ -716,7 +820,7 @@ void LapBlend_Tester() {
 	// 籃球 (1334x1000, 237ms)
 	//name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
 	// 校園 (752x500, 68ms)
-	name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=221, Ay=4;
+	name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
 
 	// 讀取圖片
 	ImgData_read(src1, name1);
