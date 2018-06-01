@@ -14,7 +14,8 @@ using namespace std;
 #include "Raw2Img.hpp"
 #include "LapBlend.hpp"
 
-
+#include <opencv2\opencv.hpp>
+using namespace cv;
 
 //==================================================================================
 // 轉換
@@ -796,6 +797,339 @@ void WarpCyliMuitBlend(basic_ImgData &dst,
 
 
 //==================================================================================
+// 柏松混合
+//==================================================================================
+// 輸出圓柱投影 AB, A, B
+void cutWarpCyliImgApBp(const basic_ImgData &src1, const basic_ImgData &src2, 
+	basic_ImgData &dst, basic_ImgData &dst1, basic_ImgData &dst2, 
+	const vector<int>& corner, int mode=0)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=corner[3]-corner[1]-abs(my);
+	int newW=corner[2]-corner[0]+mx;
+	int img2mx = newW/2.0;
+	// 重建大小
+	ImgData_resize(dst, newW, newH, 24);
+	ImgData_resize(dst1, newW-mx, newH, 24);
+	ImgData_resize(dst2, newW-img2mx, newH, 24);
+	// 兩張圖的高度偏差值
+	int myA = my<0? 0:my;
+	int myB = my>0? 0:-my;
+
+
+#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW; i++) {
+			int src1idx;
+			// 圖1
+			if (i < corner[2]-corner[0]) {
+				src1idx=(((j+myA)+corner[1])*src1.width +(i+corner[0])) *3;
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst1.raw_img[(j*dst1.width +i)*3 +rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 圖2
+			if (i >= img2mx) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst2.raw_img[(j*dst2.width +(i-img2mx)) *3+rgb] = 
+						src2.raw_img[(((j+myB)+corner[1])*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+}
+// 裁減一張圓柱
+void cutWarpCyliImgAB(const basic_ImgData &src1, const basic_ImgData &src2, 
+	basic_ImgData &dst, basic_ImgData &dst1, basic_ImgData &dst2, 
+	const vector<int>& corner, int mode=0)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=corner[3]-corner[1]-abs(my);
+	int newW=corner[2]-corner[0]+mx;
+	int img2mx = mx;
+	// 重建大小
+	ImgData_resize(dst, newW, newH, 24);
+	ImgData_resize(dst1, newW-mx, newH, 24);
+	ImgData_resize(dst2, newW-img2mx, newH, 24);
+	// 兩張圖的高度偏差值
+	int myA = my<0? 0:my;
+	int myB = my>0? 0:-my;
+
+
+#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW; i++) {
+			int src1idx;
+			// 圖1
+			if (i < corner[2]-corner[0]) {
+				src1idx=(((j+myA)+corner[1])*src1.width +(i+corner[0])) *3;
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst1.raw_img[(j*dst1.width +i)*3 +rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 圖2
+			if (i >= img2mx) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					dst2.raw_img[(j*dst2.width +(i-img2mx)) *3+rgb] = 
+						src2.raw_img[(((j+myB)+corner[1])*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+}
+// 延伸圓柱投影A
+void cutWarpCyliImgA(
+	const basic_ImgData &src1, const basic_ImgData &src2, 
+	basic_ImgData &dst,
+	const vector<int>& corner)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=corner[3]-corner[1]-abs(my);
+	int newW=corner[2]-corner[0]+mx;
+	ImgData_resize(dst, newW, newH, 24);
+	// 兩張圖的高度偏差值
+	int myA = my<0? 0:my;
+	int myB = my>0? 0:-my;
+
+	// 整張圖(test用)
+	basic_ImgData& all=dst;
+
+	// 像右延伸像素
+	basic_ImgData right, right_gau;
+	ImgData_resize(right, newH, 1, 24);
+	//#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		int src1idx;
+		for (int i = 0; i < newW; i++) {
+			int idx=(j*dst.width +i) *3;
+			// 圖1
+			if (i < corner[2]-corner[0] /*newW/2.0*/) {
+				src1idx=(((j+myA)+corner[1])*src1.width +(i+corner[0])) *3;
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					all.raw_img[idx+rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 向右拉平
+			if (i >= /*mx*/ newW/2.0 ) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					//all.raw_img[idx+rgb] = src1.raw_img[src1idx+rgb];
+					right.raw_img[j*3+rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 圖2
+			if (i >= /*mx*/ newW/2.0) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					//all.raw_img[idx+rgb] = src2.raw_img[(((j+myB)+corner[1])*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+
+	GauBlur(right, right_gau, 10, 100);
+
+	for (int j = 0; j < newH; j++) {
+		for (int i = 0; i < newW; i++) {
+			int idx=(j*dst.width +i) *3;
+			int src1idx;
+			// 向右拉平
+			if (i >= corner[2]-corner[0] ) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					all.raw_img[idx+rgb] = right_gau.raw_img[j*3+rgb];
+				}
+			}
+		}
+	}
+}
+// 圓柱投影AB_all
+void cutWarpCyliImgAB_all(
+	const basic_ImgData &src1, const basic_ImgData &src2, 
+	basic_ImgData &dst,
+	const vector<int>& corner)
+{
+	// 偏移量
+	int mx=corner[4];
+	int my=corner[5];
+	// 新圖大小
+	int newH=corner[3]-corner[1]-my;
+	int newW=corner[2]-corner[0]+mx;
+	ImgData_resize(dst, newW, newH, 24);
+	// 兩張圖的高度偏差值
+	int myA = my<0? 0:my;
+	int myB = my>0? 0:-my;
+
+	// 整張圖(test用)
+	basic_ImgData& all=dst;
+
+	// 像右延伸像素
+	basic_ImgData right, right_gau;
+	ImgData_resize(right, newH, 1, 24);
+	//#pragma omp parallel for
+	for (int j = 0; j < newH; j++) {
+		int src1idx;
+		for (int i = 0; i < newW; i++) {
+			int idx=(j*dst.width +i) *3;
+			// 圖1
+			if (i < /*corner[2]-corner[0]*/ newW/2.0) {
+				src1idx=(((j+myA)+corner[1])*src1.width +(i+corner[0])) *3;
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					all.raw_img[idx+rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 向右拉平
+			if (i >= /*mx*/ newW/2.0 ) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					//all.raw_img[idx+rgb] = src1.raw_img[src1idx+rgb];
+					right.raw_img[j*3+rgb] = src1.raw_img[src1idx+rgb];
+				}
+			}
+			// 圖2
+			if (i >= /*mx*/ newW/2.0) {
+				for (int  rgb = 0; rgb < 3; rgb++) {
+					all.raw_img[idx+rgb] = 
+						src2.raw_img[(((j+myB)+corner[1])*src1.width +((i-mx)+corner[0])) *3+rgb];
+				}
+			}
+		}
+	}
+	ImgData_write(all, "temp\\___all.bmp");
+}
+// 柏松混合圓柱(測試中)
+void WarpCyliMuitBlend_pos(basic_ImgData &dst, 
+	const basic_ImgData &src1, const basic_ImgData &src2,
+	int mx, int my) 
+{
+	// 檢測圓柱圖角點(minX, minY, maxX, maxY, mx, my)
+	vector<int> corner;
+	WarpCyliCorner(src1, corner);
+	corner.push_back(mx);
+	corner.push_back(my);
+	// 新圖大小
+	int newH=corner[3]-corner[1]-my;
+	int newW=corner[2]-corner[0]+mx;
+	ImgData_resize(dst, newW, newH, 24);
+
+	//--------------------------------------------------
+	// 整張圖(test用)
+	// 擷取AB
+	basic_ImgData dst1, dst2;
+
+	// 測試單讀A與B
+	cutWarpCyliImgAB(src1, src2, dst, dst1, dst2, corner);
+	ImgData_write(dst1, "temp\\_dst1_[0, 0].bmp");
+	ImgData_write(dst2, "temp\\_dst2_["+to_string(mx)+", "+to_string(my)+"].bmp");
+
+	// 取出修改過的兩張
+	cutWarpCyliImgApBp(src1, src2, dst, dst1, dst2, corner);
+	ImgData_write(dst2, "temp\\___dst2p.bmp");
+
+	// 延長dstp
+	basic_ImgData dst1p;
+	cutWarpCyliImgA(src1, src2, dst1p, corner);
+	ImgData_write(dst1p, "temp\\___dst1p.bmp");
+
+	// 輸出未混合圖測試
+	basic_ImgData AB_all;
+	//cutWarpCyliImgAB_all(src1, src2, AB_all, corner);
+
+	// 別人寫的金字塔混和
+	//mutBlender();
+
+
+	// 柏松混合
+	Mat matsrc = imread("temp\\___dst2p.bmp");
+	Mat matsrcbg = imread("temp\\___dst1p.bmp");
+	//Mat src_mask=Mat::zeros(matsrc.rows, matsrc.cols, matsrc.depth());
+	Mat src_mask(matsrc.rows, matsrc.cols, CV_8UC3, Scalar(0,0,0));
+	//src_mask = 255 * Mat::ones(matsrc.rows, matsrc.cols, matsrc.depth());
+	int edge=0;
+	for (int j = 0; j < matsrc.rows; j++) {
+		for (int i = 0; i < matsrc.cols-edge; i++) {
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[0] = 255;
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[1] = 255;
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[2] = 255;
+		}
+	}
+	//imwrite("src_mask.bmp", src_mask);
+
+
+	Point mvPosi((matsrcbg.cols*2-matsrc.cols)/2-edge/2, matsrcbg.rows / 2);
+	// 一般柏松融合
+	Mat normal_clone;
+	Timer t1;
+	seamlessClone(matsrc, matsrcbg, src_mask, mvPosi, normal_clone, NORMAL_CLONE);
+	t1.print("seamlessClone");
+	//imshow("normal_clone", normal_clone);
+	imwrite("WarpCyliMuitBlend_pos.bmp", normal_clone);
+}
+
+void WarpCyliMuitBlend_pos2(basic_ImgData &dst, 
+	const basic_ImgData &src1, const basic_ImgData &src2,
+	int mx, int my) 
+{
+	// 檢測圓柱圖角點(minX, minY, maxX, maxY, mx, my)
+	vector<int> corner;
+	WarpCyliCorner(src1, corner);
+	corner.push_back(mx);
+	corner.push_back(my);
+	// 新圖大小
+	int newH=corner[3]-corner[1]-my;
+	int newW=corner[2]-corner[0]+mx;
+	ImgData_resize(dst, newW, newH, 24);
+
+	//--------------------------------------------------
+	// 整張圖(test用)
+	// 擷取AB
+	basic_ImgData dst1, dst2;
+
+	// 取出重疊區
+	getOverlap(src1, src2, dst1, dst2, corner);
+	ImgData_write(dst1, "temp\\___dst1.bmp");
+	ImgData_write(dst2, "temp\\___dst2.bmp");
+
+	// 輸出未混合圖測試
+	basic_ImgData AB_all;
+	//cutWarpCyliImgAB_all(src1, src2, AB_all, corner);
+
+
+	// 柏松混合
+	Mat matsrcbg = imread("temp\\___dst1.bmp");
+	Mat matsrc = imread("temp\\___dst2.bmp");
+	int edge=100;
+	//Mat src_mask=Mat::zeros(matsrc.rows, matsrc.cols, matsrc.depth());
+	Mat src_mask(matsrc.rows, matsrc.cols, CV_8UC3, Scalar(0,0,0));
+	//src_mask = 255 * Mat::ones(matsrc.rows, matsrc.cols, matsrc.depth());
+
+	for (int j = 0; j < matsrc.rows; j++) {
+		for (int i = matsrc.cols/2; i < matsrc.cols; i++) {
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[0] = 255;
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[1] = 255;
+			src_mask.at<Vec3b>(j*matsrc.cols+i)[2] = 255;
+		}
+	}
+	//imwrite("src_mask.bmp", src_mask);
+
+
+	Point mvPosi((matsrcbg.cols*2-matsrc.cols)/2 + matsrc.cols/4, matsrcbg.rows / 2);
+	// 一般柏松融合
+	Mat normal_clone;
+	Timer t1;
+	seamlessClone(matsrc, matsrcbg, src_mask, mvPosi, normal_clone, NORMAL_CLONE);
+	t1.print("seamlessClone");
+	//imshow("normal_clone", normal_clone);
+	imwrite("WarpCyliMuitBlend_pos.bmp", normal_clone);
+
+}
+
+//==================================================================================
 // 公開函式
 //==================================================================================
 // 混合原始圖
@@ -806,7 +1140,12 @@ void LapBlender(basic_ImgData &dst,
 	basic_ImgData warp1, warp2;
 	WarpCylindrical(warp1, src1, ft, 0, 0, 0);
 	WarpCylindrical(warp2, src2, ft, 0, 0, 0);
+
+	//ImgData_write(warp1, "___warp1.bmp");
+	//ImgData_write(warp2, "___warp2.bmp");
+
 	WarpCyliMuitBlend(dst, warp1, warp2, mx, my);
+	WarpCyliMuitBlend_pos(dst, warp1, warp2, mx, my);
 }
 
 
@@ -818,9 +1157,14 @@ void LapBlend_Tester() {
 	double ft; int Ax, Ay;
 
 	// 籃球 (1334x1000, 237ms)
-	//name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
+	name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
 	// 校園 (752x500, 68ms)
-	name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
+	//name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
+	//name1="srcIMG\\DSC_2940.bmp", name2="srcIMG\\DSC_2941.bmp"; ft=606.23, Ax = 257-1, Ay = 20;
+	//name1="srcIMG\\DSC_2942.bmp", name2="srcIMG\\DSC_2943.bmp"; ft=610.092, Ax=191, Ay=0;
+	//name1="srcIMG\\DSC_2952.bmp", name2="srcIMG\\DSC_2953.bmp"; ft=1380.61, Ax=430, Ay=1;
+	//name1="srcIMG\\DSC_2956.bmp", name2="srcIMG\\DSC_2957.bmp"; ft=1130.52, Ax=212, Ay=-21;
+	
 
 	// 讀取圖片
 	ImgData_read(src1, name1);
