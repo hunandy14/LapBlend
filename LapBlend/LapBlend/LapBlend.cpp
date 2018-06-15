@@ -46,7 +46,7 @@ void ImgData_read(basic_ImgData &dst, std::string name) {
 //==================================================================================
 // 圖片放大縮小
 //==================================================================================
-// 快速 線性插值
+// 快速線性插值
 inline static void fast_Bilinear_rgb(unsigned char* p, 
 	const basic_ImgData& src, double y, double x)
 {
@@ -65,22 +65,22 @@ inline static void fast_Bilinear_rgb(unsigned char* p,
 	double R , G, B;
 	int x2 = (_x+1) > src.width -1? src.width -1: _x+1;
 	int y2 = (_y+1) > src.height-1? src.height-1: _y+1;
-	R  = (double)src.raw_img[(_y * srcW + _x) *3 + 0] * (r_x * b_y);
-	G  = (double)src.raw_img[(_y * srcW + _x) *3 + 1] * (r_x * b_y);
-	B  = (double)src.raw_img[(_y * srcW + _x) *3 + 2] * (r_x * b_y);
-	R += (double)src.raw_img[(_y * srcW + x2) *3 + 0] * (l_x * b_y);
-	G += (double)src.raw_img[(_y * srcW + x2) *3 + 1] * (l_x * b_y);
-	B += (double)src.raw_img[(_y * srcW + x2) *3 + 2] * (l_x * b_y);
-	R += (double)src.raw_img[(y2 * srcW + _x) *3 + 0] * (r_x * t_y);
-	G += (double)src.raw_img[(y2 * srcW + _x) *3 + 1] * (r_x * t_y);
-	B += (double)src.raw_img[(y2 * srcW + _x) *3 + 2] * (r_x * t_y);
-	R += (double)src.raw_img[(y2 * srcW + x2) *3 + 0] * (l_x * t_y);
-	G += (double)src.raw_img[(y2 * srcW + x2) *3 + 1] * (l_x * t_y);
-	B += (double)src.raw_img[(y2 * srcW + x2) *3 + 2] * (l_x * t_y);
-
-	*(p+0) = (unsigned char) R;
-	*(p+1) = (unsigned char) G;
-	*(p+2) = (unsigned char) B;
+	R  = (double)src.raw_img[(_y*srcW + _x)*3 + 0]*(r_x * b_y);
+	G  = (double)src.raw_img[(_y*srcW + _x)*3 + 1]*(r_x * b_y);
+	B  = (double)src.raw_img[(_y*srcW + _x)*3 + 2]*(r_x * b_y);
+	R += (double)src.raw_img[(_y*srcW + x2)*3 + 0]*(l_x * b_y);
+	G += (double)src.raw_img[(_y*srcW + x2)*3 + 1]*(l_x * b_y);
+	B += (double)src.raw_img[(_y*srcW + x2)*3 + 2]*(l_x * b_y);
+	R += (double)src.raw_img[(y2*srcW + _x)*3 + 0]*(r_x * t_y);
+	G += (double)src.raw_img[(y2*srcW + _x)*3 + 1]*(r_x * t_y);
+	B += (double)src.raw_img[(y2*srcW + _x)*3 + 2]*(r_x * t_y);
+	R += (double)src.raw_img[(y2*srcW + x2)*3 + 0]*(l_x * t_y);
+	G += (double)src.raw_img[(y2*srcW + x2)*3 + 1]*(l_x * t_y);
+	B += (double)src.raw_img[(y2*srcW + x2)*3 + 2]*(l_x * t_y);
+	
+	p[0] = (unsigned char) R;
+	p[1] = (unsigned char) G;
+	p[2] = (unsigned char) B;
 }
 // 快速補值
 inline static void fast_NearestNeighbor_rgb(unsigned char* p,
@@ -96,67 +96,106 @@ inline static void fast_NearestNeighbor_rgb(unsigned char* p,
 	double R , G, B;
 	int x2 = (_x+1) > src.width -1? src.width -1: _x+1;
 	int y2 = (_y+1) > src.height-1? src.height-1: _y+1;
-	R  = (double)src.raw_img[(y2 * srcW + x2) *3 + 0];
-	G  = (double)src.raw_img[(y2 * srcW + x2) *3 + 1];
-	B  = (double)src.raw_img[(y2 * srcW + x2) *3 + 2];
+	R = (double)src.raw_img[(y2*srcW + x2) *3 + 0];
+	G = (double)src.raw_img[(y2*srcW + x2) *3 + 1];
+	B = (double)src.raw_img[(y2*srcW + x2) *3 + 2];
 
-	*(p+0) = (unsigned char) R;
-	*(p+1) = (unsigned char) G;
-	*(p+2) = (unsigned char) B;
+	p[0] = (unsigned char) R;
+	p[1] = (unsigned char) G;
+	p[2] = (unsigned char) B;
 }
+// 圖像縮放
+void WarpScale(const basic_ImgData &src, basic_ImgData &dst, double ratio){
+	int newH = (int)((src.height * ratio) +0.5);
+	int newW = (int)((src.width  * ratio) +0.5);
+	// 初始化 dst
+	dst.raw_img.resize(newW * newH * src.bits/8.0);
+	dst.width  = newW;
+	dst.height = newH;
+	dst.bits   = src.bits;
 
+	// 縮小的倍率
+	double r1W = ((double)src.width )/(dst.width );
+	double r1H = ((double)src.height)/(dst.height);
+	// 放大的倍率
+	double r2W = (src.width -1.0)/(dst.width -1.0);
+	double r2H = (src.height-1.0)/(dst.height-1.0);
+	// 縮小時候的誤差
+	double deviW = ((src.width-1.0)  - (dst.width -1.0)*(r1W)) /dst.width;
+	double deviH = ((src.height-1.0) - (dst.height-1.0)*(r1H)) /dst.height;
+
+	// 跑新圖座標
+#pragma omp parallel for
+	for (int j = 0; j < newH; ++j) {
+		for (int i = 0; i < newW; ++i) {
+			// 調整對齊
+			double srcY, srcX;
+			if (ratio < 1.0) {
+				srcX = i*(r1W+deviW);
+				srcY = j*(r1H+deviH);
+			} else if (ratio >= 1.0) {
+				srcX = i*r2W;
+				srcY = j*r2H;
+			}
+			// 獲取插補值
+			unsigned char* p = &dst.raw_img[(j*newW + i) *3];
+			fast_Bilinear_rgb(p, src, srcY, srcX);
+		}
+	}
+}
 
 
 //==================================================================================
 // 模糊圖片
 //==================================================================================
-// 高斯公式
-static float gau_meth(size_t r, double p) {
-	constexpr double M_PI = 3.14159265358979323846;
-	double two = 2.0;
-	double num = exp(-pow(r, two) / (two*pow(p, two)));
-	num /= sqrt(two*M_PI)*p;
-	return num;
-}
-// 高斯矩陣 (mat_len defa=3)
-static vector<double> gau_matrix(double p, size_t mat_len) {
-	vector<double> gau_mat;
-	// 計算矩陣長度
-	if (mat_len == 0) {
-		//mat_len = (int)(((p - 0.8) / 0.3 + 1.0) * 2.0);// (顏瑞穎給的公式)
-		mat_len = (int)(round((p*6 + 1))) | 1; // (opencv的公式)
-	}
-	// 奇數修正
-	if (mat_len % 2 == 0) { ++mat_len; }
-	// 一維高斯矩陣
-	gau_mat.resize(mat_len);
-	double sum = 0;
-	for (int i = 0, j = mat_len / 2; j < mat_len; ++i, ++j) {
-		double temp;
-		if (i) {
-			temp = gau_meth(i, p);
-			gau_mat[j] = temp;
-			gau_mat[mat_len - j - 1] = temp;
-			sum += temp += temp;
-		}
-		else {
-			gau_mat[j] = gau_meth(i, p);
-			sum += gau_mat[j];
-		}
-	}
-	// 歸一化
-	for (auto&& i : gau_mat) { i /= sum; }
-	return gau_mat;
-}
+// 高斯核心
+static vector<double> getGaussianKernel(int n, double sigma)
+{
+	const int SMALL_GAUSSIAN_SIZE = 7;
+	static const float small_gaussian_tab[][SMALL_GAUSSIAN_SIZE] =
+	{
+		{1.f},
+		{0.25f, 0.5f, 0.25f},
+		{0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f},
+		{0.03125f, 0.109375f, 0.21875f, 0.28125f, 0.21875f, 0.109375f, 0.03125f}
+	};
 
+	const float* fixed_kernel = n % 2 == 1 && n <= SMALL_GAUSSIAN_SIZE && sigma <= 0 ?
+		small_gaussian_tab[n>>1] : 0;
+
+	vector<double> kernel(n);
+	double* cd = kernel.data();
+
+	double sigmaX = sigma > 0 ? sigma : ((n-1)*0.5 - 1)*0.3 + 0.8;
+	double scale2X = -0.5/(sigmaX*sigmaX);
+	double sum = 0;
+
+	int i;
+	for( i = 0; i < n; i++ )
+	{
+		double x = i - (n-1)*0.5;
+		double t = fixed_kernel ? (double)fixed_kernel[i] : std::exp(scale2X*x*x);
+		cd[i] = t;
+		sum += cd[i];
+	} 
+
+	sum = 1./sum;
+
+	for( i = 0; i < n; i++ )
+	{
+		cd[i] *= sum;
+	}
+
+	return kernel;
+}
 // 高斯模糊
-void GauBlur(const basic_ImgData& src, basic_ImgData& dst, double p, size_t mat_len)
+void GaussianBlur(const basic_ImgData& src, basic_ImgData& dst, size_t mat_len, double p=0)
 {
 	Timer t1;
 	size_t width  = src.width;
 	size_t height = src.height;
 
-	vector<double> gau_mat = gau_matrix(p, mat_len);
+	vector<double> gau_mat = getGaussianKernel(mat_len, p);
 	// 初始化 dst
 	dst.raw_img.resize(width*height * src.bits/8.0);
 	dst.width  = width;
@@ -275,39 +314,6 @@ static vector<double> getGauKer(int x){
 //==================================================================================
 // 金字塔處理
 //==================================================================================
-void WarpScale(const basic_ImgData &src, basic_ImgData &dst, double Ratio){
-	int newH = (int)((src.height * Ratio) +0.5);
-	int newW = (int)((src.width  * Ratio) +0.5);
-	// 初始化 dst
-	dst.raw_img.resize(newW * newH * src.bits/8.0);
-	dst.width  = newW;
-	dst.height = newH;
-	dst.bits   = src.bits;
-	// 跑新圖座標
-
-	int i, j;
-#pragma omp parallel for private(i, j)
-	for (j = 0; j < newH; ++j) {
-		for (i = 0; i < newW; ++i) {
-			// 調整對齊
-			double srcY, srcX;
-			if (Ratio < 1) {
-				srcY = ((j+0.5f)/Ratio) - 0.5;
-				srcX = ((i+0.5f)/Ratio) - 0.5;
-			} else {
-				srcY = j*(src.height-1.f) / (newH-1.f);
-				srcX = i*(src.width -1.f) / (newW-1.f);
-			}
-			// 獲取插補值
-			unsigned char* p = &dst.raw_img[(j*newW + i) *3];
-			if (Ratio>1) {
-				fast_Bilinear_rgb(p, src, srcY, srcX);
-			} else {
-				fast_NearestNeighbor_rgb(p, src, srcY, srcX);
-			}
-		}
-	}
-}
 void pyraUp(const basic_ImgData &src, basic_ImgData &dst) {
 	int newH = (int)(src.height * 2.0);
 	int newW = (int)(src.width  * 2.0);
@@ -320,7 +326,7 @@ void pyraUp(const basic_ImgData &src, basic_ImgData &dst) {
 
 	basic_ImgData temp;
 	WarpScale(src, temp, 2.0);
-	GauBlur(temp, dst, 1.6, 4);
+	GaussianBlur(temp, dst, 3);
 }
 void pyraDown(const basic_ImgData &src, basic_ImgData &dst) {
 	//Timer t1;
@@ -336,7 +342,7 @@ void pyraDown(const basic_ImgData &src, basic_ImgData &dst) {
 
 	basic_ImgData temp;
 	WarpScale(src, temp, 0.5);
-	GauBlur(temp, dst, 1.6, 4);
+	GaussianBlur(temp, dst, 3);
 }
 void imgSub(basic_ImgData &src, const basic_ImgData &dst) {
 	int i, j;
@@ -818,9 +824,9 @@ void LapBlend_Tester() {
 	double ft; int Ax, Ay;
 
 	// 籃球 (1334x1000, 237ms)
-	//name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
+	name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
 	// 校園 (752x500, 68ms)
-	name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
+	//name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
 
 	// 讀取圖片
 	ImgData_read(src1, name1);
