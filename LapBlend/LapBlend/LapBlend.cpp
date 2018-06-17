@@ -443,7 +443,61 @@ void reLaplacianPyramids(LapPyr &pyr, basic_ImgData &dst, int octvs=5) {
 	dst = pyr[0];
 }
 // 混合拉普拉斯金字塔
+void imgBlendHalf(const basic_ImgData& imgA, const basic_ImgData& imgB, basic_ImgData& dst) {
+#pragma omp parallel for
+	for(int j = 0; j < dst.height; j++) {
+		for(int i = 0; i < dst.width; i++) {
+			for(int rgb = 0; rgb < 3; rgb++) {
+				int dstIdx = (j* dst.width+i)*3;
+				int LAIdx  = (j*imgA.width+i)*3;
+				int LBIdx  = (j*imgB.width+i)*3;
+				int center = dst.width >>1;
+				// 拉普拉斯差值區 (左邊就放左邊差值，右邊放右邊差值，正中間放平均)
+				if(i == center) {// 正中間
+					dst.raw_img[dstIdx +rgb] = (imgA.raw_img[LAIdx +rgb] + imgB.raw_img[LBIdx +rgb]) >>1;
+				} else if(i > center) {// 右半部
+					dst.raw_img[dstIdx +rgb] = imgB.raw_img[LBIdx +rgb];
+				} else { // 左半部
+					dst.raw_img[dstIdx +rgb] = imgA.raw_img[LAIdx +rgb];
+				}
+			}
+		}
+	}
+}
+void imgBlendAlpha(const basic_ImgData& imgA, const basic_ImgData& imgB, basic_ImgData& dst) {
+	double rat = 1.0 / dst.width;
+#pragma omp parallel for
+	for(int j = 0; j < dst.height; j++) {
+		for(int i = 0; i < dst.width; i++) {
+			for(int rgb = 0; rgb < 3; rgb++) {
+				int dstIdx = (j* dst.width +i)*3;
+				int LAIdx  = (j*imgA.width +i)*3;
+				int LBIdx  = (j*imgB.width +i)*3;
+				double r1 = rat*i;
+				double r2 = 1.0-r1;
+				dst.raw_img[dstIdx +rgb] = imgA.raw_img[LAIdx +rgb]*r2 + imgB.raw_img[LBIdx +rgb]*r1;
+			}
+		}
+	}
+}
 void blendLaplacianPyramids(LapPyr& LS, const LapPyr& LA, const LapPyr& LB) {
+	LS.resize(LA.size());
+	// 高斯矩陣
+	auto gausKernal = getGauKer(LA.back().width);
+	// 混合圖片
+	for(int idx = 0; idx < LS.size(); idx++) {
+		// 初始化
+		basic_ImgData& dst = LS[idx];
+		ImgData_resize(dst, LA[idx].width, LA[idx].height, LA[idx].bits);
+		// 開始混合各層
+		if(idx == LS.size()-1) {
+			imgBlendAlpha(LA[idx], LB[idx], dst);
+		} else {
+			imgBlendHalf(LA[idx], LB[idx], dst);
+		}
+	}
+}
+void blendLaplacianPyramids2(LapPyr& LS, const LapPyr& LA, const LapPyr& LB) {
 	LS.resize(LA.size());
 	// 高斯矩陣
 	auto gausKernal = getGauKer(LA.back().width);
@@ -811,7 +865,7 @@ void LapBlend_Tester() {
 	string name1, name2;
 	double ft; int Ax, Ay;
 
-	// 籃球 (1334x1000, 237ms)
+	// 籃球 (1334x1000, 237ms) 80~100ms
 	name1="srcIMG\\ball_01.bmp", name2="srcIMG\\ball_02.bmp"; ft=2252.97, Ax=539, Ay=-37;
 	// 校園 (752x500, 68ms)
 	//name1="srcIMG\\sc02.bmp", name2="srcIMG\\sc03.bmp"; ft=676.974, Ax=216, Ay=4;
