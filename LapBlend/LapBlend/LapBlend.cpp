@@ -449,26 +449,22 @@ void blendLaplacianPyramids(LapPyr& LS, const LapPyr& LA, const LapPyr& LB) {
 	auto gausKernal = getGauKer(LA.back().width);
 	// 混合圖片
 	for(int idx = 0; idx < LS.size(); idx++) {
-		int newH =   (int)(LA[idx].height);
-		int newW =   (int)(LA[idx].width);
-		int center = (int)(LA[idx].width *0.5);
-
 		// 初始化
-		basic_ImgData dst;
-		dst.raw_img.resize(newW * newH * LA[idx].bits);
-		dst.width  = newW;
-		dst.height = newH;
-		dst.bits   = LA[idx].bits;
+		ImgData_resize(LS[idx], LA[idx].width, LA[idx].height, LA[idx].bits);
+		// 捷徑
+		basic_ImgData& dst = LS[idx];
+		const basic_ImgData& imgA = LA[idx];
+		const basic_ImgData& imgB = LB[idx];
 
 		// 開始混合各層
-		int i, j, rgb;
-#pragma omp parallel for private(i, j, rgb)
-		for(j = 0; j < newH; j++) {
-			for(i = 0; i < newW; i++) {
-				for(rgb = 0; rgb < 3; rgb++) {
+#pragma omp parallel for
+		for(int j = 0; j < dst.height; j++) {
+			for(int i = 0; i < dst.width; i++) {
+				for(int rgb = 0; rgb < 3; rgb++) {
 					int dstIdx = (j*dst.width + i) * 3;
 					int LAIdx = (j*LA[idx].width+i)*3;
 					int LBIdx = (j*LB[idx].width+i)*3;
+					int center = dst.width >>1;
 
 					if(idx == LS.size()-1) {
 						// 拉普拉斯彩色區 (L*高斯) + (R*(1-高斯))
@@ -477,26 +473,18 @@ void blendLaplacianPyramids(LapPyr& LS, const LapPyr& LA, const LapPyr& LB) {
 							LB[idx].raw_img[LBIdx +rgb] * (1.f - gausKernal[i]);
 					} else {
 						// 拉普拉斯差值區 (左邊就放左邊差值，右邊放右邊差值，正中間放平均)
-						if(i == center) {
-							// 正中間
-							dst.raw_img[dstIdx +rgb] = 0.5 *(
-								LA[idx].raw_img[LAIdx +rgb]+
-								LB[idx].raw_img[LBIdx +rgb]);
-						} else if(i > center) {
-							// 右半部
-							dst.raw_img[dstIdx +rgb] = 
-								LB[idx].raw_img[LBIdx +rgb];
-						} else {
-							// 左半部
-							dst.raw_img[dstIdx +rgb] = 
-								LA[idx].raw_img[LAIdx +rgb];
+						if(i == center) {// 正中間
+							dst.raw_img[dstIdx +rgb] = (imgA.raw_img[LAIdx +rgb] + imgB.raw_img[LBIdx +rgb]) >>1;
+						} else if(i > center) {// 右半部
+							dst.raw_img[dstIdx +rgb] = imgB.raw_img[LBIdx +rgb];
+						} else { // 左半部
+							dst.raw_img[dstIdx +rgb] = imgA.raw_img[LAIdx +rgb];
 						}
 					}
 				}
 
 			}
 		}
-		LS[idx] = std::move(dst);
 	}
 }
 // 混合圖片
