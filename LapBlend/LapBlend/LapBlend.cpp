@@ -11,36 +11,7 @@ Final: 2018/04/12
 #include <timer.hpp>
 using namespace std;
 
-#include "Raw2Img.hpp"
 #include "LapBlend.hpp"
-
-
-
-//==================================================================================
-// 轉換
-//==================================================================================
-// 重設 ImgData 大小
-void ImgData_resize(basic_ImgData &dst, int newW, int newH, int bits) {
-	dst.raw_img.resize(newW*newH*3);
-	dst.width = newW;
-	dst.height = newH;
-	dst.bits = bits;
-};
-void ImgData_resize(const basic_ImgData& src, basic_ImgData &dst) {
-	dst.raw_img.resize(src.width*src.height*3);
-	dst.width = src.width;
-	dst.height = src.height;
-	dst.bits = src.bits;
-};
-// 輸出 bmp
-void ImgData_write(const basic_ImgData &src, string name) {
-	Raw2Img::raw2bmp(name, src.raw_img, src.width, src.height);
-};
-// 讀取bmp
-void ImgData_read(basic_ImgData &dst, std::string name) {
-	Raw2Img::read_bmp(dst.raw_img, name, &dst.width, &dst.height, &dst.bits);
-}
-
 
 
 //==================================================================================
@@ -482,8 +453,6 @@ void imgBlendAlpha(const basic_ImgData& imgA, const basic_ImgData& imgB, basic_I
 }
 void blendLaplacianPyramids(LapPyr& LS, const LapPyr& LA, const LapPyr& LB) {
 	LS.resize(LA.size());
-	// 高斯矩陣
-	auto gausKernal = getGauKer(LA.back().width);
 	// 混合圖片
 	for(int idx = 0; idx < LS.size(); idx++) {
 		// 初始化

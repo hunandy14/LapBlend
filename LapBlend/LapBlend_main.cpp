@@ -10,7 +10,6 @@ Final: 2018/04/12
 using namespace std;
 
 #include "timer.hpp"
-#include "Raw2Img.hpp"
 #include "LapBlend.hpp"
 
 //================================================================
